@@ -48,7 +48,14 @@ def eval_from_json(response: str) -> dict | None:
 
 @lru_cache(maxsize=None)
 def _get_langchain_llm(model: str):
-    """Build a LangChain chat model for ``model``, preferring Biomni's own factory."""
+    """Build a LangChain chat model for ``model``, preferring Biomni's own factory.
+
+    Without ``biomni`` installed, fall back to source-detecting from the model
+    name prefix the same way ``biomni.llm.get_llm`` does -- a ``claude-*``
+    model must go through ``ChatAnthropic``/``ANTHROPIC_API_KEY``, not
+    ``ChatOpenAI``, or the request silently gets routed to OpenAI's real
+    endpoint with an empty key.
+    """
     try:
         from biomni.llm import get_llm
 
@@ -56,11 +63,43 @@ def _get_langchain_llm(model: str):
     except Exception:
         pass
 
+    if model.startswith("claude-"):
+        try:
+            from langchain_anthropic import ChatAnthropic
+        except ImportError as e:
+            raise ImportError(
+                f"Model '{model}' looks like a Claude model but `biomni` isn't installed and "
+                "`langchain-anthropic` isn't either. Run: pip install langchain-anthropic"
+            ) from e
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise RuntimeError(f"Model '{model}' needs ANTHROPIC_API_KEY set in the environment.")
+        return ChatAnthropic(model=model, api_key=api_key, timeout=240, max_retries=2)
+
+    if model.startswith("gemini-"):
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+        except ImportError as e:
+            raise ImportError(
+                f"Model '{model}' looks like a Gemini model but `biomni` isn't installed and "
+                "`langchain-google-genai` isn't either. Run: pip install langchain-google-genai"
+            ) from e
+        api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise RuntimeError(f"Model '{model}' needs GOOGLE_API_KEY (or GEMINI_API_KEY) set in the environment.")
+        return ChatGoogleGenerativeAI(model=model, google_api_key=api_key, timeout=240, max_retries=2)
+
     from langchain_openai import ChatOpenAI
 
     base_url = os.getenv("OPENAI_API_BASE") or os.getenv("GPT_API_BASE") or os.getenv("XINFERENCE_API_BASE")
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("GPT_API_KEY") or os.getenv("XINFERENCE_API_KEY") or "EMPTY"
-    return ChatOpenAI(model=model, base_url=base_url, api_key=api_key, timeout=240, max_retries=2)
+    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("GPT_API_KEY") or os.getenv("XINFERENCE_API_KEY")
+    if not api_key and base_url is None:
+        raise RuntimeError(
+            f"Model '{model}' doesn't match a known Claude/Gemini prefix, so it's being routed to "
+            "OpenAI's ChatOpenAI client, but no OPENAI_API_KEY (or GPT_API_KEY/XINFERENCE_API_KEY + "
+            "matching *_API_BASE for a custom endpoint) is set."
+        )
+    return ChatOpenAI(model=model, base_url=base_url, api_key=api_key or "EMPTY", timeout=240, max_retries=2)
 
 
 def chat(prompt: str, model: str = "gpt-4o-mini", system: str | None = None) -> str:

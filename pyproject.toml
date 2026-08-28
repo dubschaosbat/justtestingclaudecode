@@ -11,11 +11,15 @@ dependencies = [
     "python-dotenv>=1.0",
     "langchain-core>=0.3",
     "langchain-openai>=0.2",
+    "langchain-anthropic>=0.3",
 ]
 
 [project.optional-dependencies]
 biomni = [
     "biomni",
+]
+gemini = [
+    "langchain-google-genai>=2.0",
 ]
 dev = [
     "pytest>=8.0",
