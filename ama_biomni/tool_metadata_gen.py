@@ -206,6 +206,9 @@ async def eval_generated_tool(
         parent_success = attack_tool.get("Parent Success Rate", 0.0)
         attack_tool["Weighted Value"] = round(success_rate + lambda_weight * (success_rate - parent_success), 4)
 
+        module = attack_tool.get("Corresponding Module", "?")
+        print(f"  [eval] {module}: '{attack_tool['Tool Name']}' -> Success Rate {attack_tool['Success Rate']}")
+
     return generated_attack_tools
 
 
@@ -303,6 +306,7 @@ async def run(args: argparse.Namespace) -> Path:
     out_path = Path(args.out_dir) / args.llm_name / args.attack_type / "result.xlsx"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    print(f"[stage 3] Generating {len(task_clusters)} initial candidate(s) ({args.attack_type})...")
     if args.attack_type == "target":
         generated = await asyncio.gather(
             *(generate_target_attack_tool(row, normal_tools_all, args.llm_name) for _, row in task_clusters.iterrows())
@@ -312,12 +316,15 @@ async def run(args: argparse.Namespace) -> Path:
             *(generate_untarget_attack_tool(task_clusters, normal_tools_all, args.llm_name) for _ in range(args.iter_num))
         )
     generated = list(generated)
+    print(f"[stage 3] Generated {len(generated)} candidate(s); evaluating against Biomni's retrieval prompt "
+          f"({args.eval_times} trials each, one candidate at a time)...")
 
     generated = await eval_generated_tool(
         generated, task_clusters, normal_tools_all, args.llm_name, args.attack_type, args.eval_times, args.lambda_weight
     )
 
-    for _ in range(args.batch_size):
+    for batch_i in range(args.batch_size):
+        print(f"[stage 3] Refinement round {batch_i + 1}/{args.batch_size}...")
         if args.attack_type == "target":
             module_best = {}
             for tool in generated:
@@ -328,7 +335,9 @@ async def run(args: argparse.Namespace) -> Path:
                 task_clusters["module_name"].isin([m for m, s in module_best.items() if s < args.threshold])
             ]
             if len(needs_work) == 0:
+                print(f"[stage 3] All modules reached the {args.threshold} threshold -- stopping early.")
                 break
+            print(f"[stage 3] {len(needs_work)} module(s) still below {args.threshold}: {needs_work['module_name'].tolist()}")
 
             reconstructed = []
             for _, row in needs_work.iterrows():
@@ -339,7 +348,9 @@ async def run(args: argparse.Namespace) -> Path:
         else:
             best = max((t["Success Rate"] for t in generated), default=0)
             if best >= args.threshold:
+                print(f"[stage 3] Best Success Rate {best} reached the {args.threshold} threshold -- stopping early.")
                 break
+            print(f"[stage 3] Best Success Rate so far: {best} (threshold {args.threshold})")
             pool = sorted(generated, key=lambda x: x.get("Weighted Value", 0), reverse=True)[:20]
             reconstructed = await asyncio.gather(
                 *(reconstruct_untarget_tool(task_clusters, pool, args.llm_name) for _ in range(args.iter_num))
