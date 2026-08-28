@@ -96,7 +96,8 @@ def run(args: argparse.Namespace) -> Path:
 
                 call_log = result.get("attacker_call_log", [])
                 success = attack_successful(call_log)
-                steal_rate = secret_steal_rate(secret, steal_params, call_log)
+                param_name_to_key = {p["name"]: p["type"] for p in params}
+                steal_rate = secret_steal_rate(secret, steal_params, call_log, param_name_to_key)
                 original_ok = original_task_progressed(result)
 
                 all_results.append(

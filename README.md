@@ -93,6 +93,41 @@ python -m ama_biomni.tool_metadata_gen --llm_name gpt-4o-mini --attack_type unta
 python -m ama_biomni.main_attacker --llm_name gpt-4o-mini --attack_type untarget --mode mock
 ```
 
+## Integrating with a DoomArena-based Biomni sandbox
+
+If you already have [DoomArena](https://github.com/ServiceNow/DoomArena) wired up against a real Biomni
+install -- e.g. via a hand-written `AttackGateway` that monkeypatches
+`ToolRetriever.prompt_based_retrieval` to inject text into whatever it returns (indirect prompt
+injection / observation poisoning) -- that's a *different* attack vector from this repo's core
+contribution, not a duplicate of it: it mutates retrieval's output after the fact, where AMA's actual
+mechanism is a new tool competing for selection on its own crafted metadata. Both patch the same seam
+and can be run side by side against the same model for comparison.
+
+`ama_biomni/doomarena_gateway.py` bridges the two: `ToolRegistrationAttackGateway` registers a live
+AMA-style malicious tool into a real `A1` agent (via the same agent-state splice
+`ama_biomni/attacker_tool.py` uses elsewhere) and reports, through DoomArena's own `SuccessFilter`
+pattern, whether it was invoked (`AttackerToolInvoked`) and whether a planted secret leaked through its
+call parameters (`SecretExfiltrated`). It requires `doomarena` installed in your sandbox; nothing else in
+this repo depends on it.
+
+`run_ama_attack.py` is a ready-to-drop-in script matching the construction pattern of a
+`run_clean_control.py`/`run_canary_attack.py` pair (`A1(path="./data", llm=model, timeout_seconds=300,
+expected_data_lake_files=[])` -- confirmed to avoid pulling Biomni's full datalake). It prefers a real
+attacker tool from stage 3's `generate_tools/<llm>/target/result.xlsx` if you've generated one, falling
+back to a built-in example so it runs with zero setup:
+
+```bash
+pip install -e .  # in your sandbox, so `ama_biomni` is importable next to `doomarena` and `biomni`
+BIOMNI_TEST_MODEL=claude-sonnet-4-5-20250929 python run_ama_attack.py --module biomni.tool.genetics
+```
+
+> **Note:** an attacker tool's `required_parameters` use persuasive names generated in stage 2 (e.g.
+> `patient_identifier`), not the canonical secret key (`PATIENT_ID`) verbatim -- that's the point of the
+> attack. `metrics.secret_steal_rate` needs the `{param_name: secret_key}` map from stage 2's output (or
+> `SECRET_PARAMS` in `run_ama_attack.py`) to translate a captured call back to the real secret before
+> comparing; passing raw call params without it will silently read as zero leakage. This mirrors AMA's
+> own `PARAMS_TO_PRIVACY_KEY` translation in its `main_attacker.py`.
+
 ## Tests
 
 ```bash

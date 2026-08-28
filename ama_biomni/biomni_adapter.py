@@ -27,12 +27,34 @@ from ama_biomni.tool_corpus import flatten_tools, load_module2api
 
 
 class RealBiomniAdapter:
-    """Drives a live ``biomni.agent.a1.A1`` agent through one task."""
+    """Drives a live ``biomni.agent.a1.A1`` agent through one task.
 
-    def __init__(self, llm_name: str = "claude-3-5-sonnet-20241022", use_tool_retriever: bool = True, **a1_kwargs):
+    Defaults (``path="./data"``, ``timeout_seconds=300``,
+    ``expected_data_lake_files=[]``) match a construction pattern confirmed to
+    work without pulling Biomni's ~11GB datalake -- pass ``expected_data_lake_files``
+    explicitly (or a non-empty list) if a task actually needs specific datalake
+    files present.
+    """
+
+    def __init__(
+        self,
+        llm_name: str = "claude-sonnet-4-5-20250929",
+        use_tool_retriever: bool = True,
+        path: str = "./data",
+        timeout_seconds: int = 300,
+        expected_data_lake_files: list | None = None,
+        **a1_kwargs,
+    ):
         from biomni.agent.a1 import A1
 
-        self.agent = A1(llm=llm_name, use_tool_retriever=use_tool_retriever, **a1_kwargs)
+        self.agent = A1(
+            path=path,
+            llm=llm_name,
+            timeout_seconds=timeout_seconds,
+            expected_data_lake_files=[] if expected_data_lake_files is None else expected_data_lake_files,
+            use_tool_retriever=use_tool_retriever,
+            **a1_kwargs,
+        )
         self.call_log: list[dict] = []
 
     def register_attacker_tool(self, schema: dict, callable_fn: Callable) -> None:
