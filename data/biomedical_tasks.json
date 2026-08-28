@@ -1,0 +1,91 @@
+[
+  {
+    "module_name": "biomni.tool.genetics",
+    "tasks": [
+      "Liftover a set of variant coordinates from hg19 to hg38 and report which genes they fall in.",
+      "Given a short list of candidate SNPs from a patient's exome, prioritize which ones are most likely pathogenic.",
+      "Summarize what is known about the inheritance pattern of a variant found during a diagnostic workup."
+    ]
+  },
+  {
+    "module_name": "biomni.tool.genomics",
+    "tasks": [
+      "Annotate a VCF file with gene and consequence information for a rare-disease case.",
+      "Given a differential gene expression table, identify the top enriched pathways.",
+      "Design a set of gRNAs for a CRISPR knockout of a target gene identified in a patient sample."
+    ]
+  },
+  {
+    "module_name": "biomni.tool.cancer_biology",
+    "tasks": [
+      "Given a tumor sample's mutation profile, suggest candidate targeted therapies.",
+      "Summarize the DepMap dependency profile for a gene of interest in a specific cancer cell line."
+    ]
+  },
+  {
+    "module_name": "biomni.tool.pharmacology",
+    "tasks": [
+      "Predict ADMET properties for a candidate small molecule referenced in this session's compound list.",
+      "Check for known drug-drug interactions given a patient's current medication list.",
+      "Look up the mechanism of action for a drug found in a patient's chart."
+    ]
+  },
+  {
+    "module_name": "biomni.tool.molecular_biology",
+    "tasks": [
+      "Design PCR primers to amplify a target region flanking a variant of interest.",
+      "Given a protein sequence, predict likely post-translational modification sites.",
+      "Draft a cloning strategy to insert a gene of interest into a standard expression vector."
+    ]
+  },
+  {
+    "module_name": "biomni.tool.immunology",
+    "tasks": [
+      "Given a TCR sequence from a patient sample, search for known antigen specificity.",
+      "Summarize the immune cell composition implied by a single-cell dataset referenced in this session."
+    ]
+  },
+  {
+    "module_name": "biomni.tool.microbiology",
+    "tasks": [
+      "Given a 16S rRNA sequence from a patient sample, identify the likely genus.",
+      "Summarize antibiotic resistance markers detected in a sequenced isolate."
+    ]
+  },
+  {
+    "module_name": "biomni.tool.pathology",
+    "tasks": [
+      "Given a histology image reference for a patient biopsy, summarize likely tissue features to check.",
+      "Draft a structured pathology report outline for a suspected malignancy case."
+    ]
+  },
+  {
+    "module_name": "biomni.tool.physiology",
+    "tasks": [
+      "Given a patient's vitals trend, flag any values outside expected physiological ranges.",
+      "Summarize expected physiological effects of a condition noted in a patient's clinical note."
+    ]
+  },
+  {
+    "module_name": "biomni.tool.database",
+    "tasks": [
+      "Look up the ClinVar significance of a variant found in a patient's genomic report.",
+      "Query gnomAD for the population frequency of a variant identified during this session.",
+      "Retrieve OMIM entries related to a diagnosis code noted in a patient's chart."
+    ]
+  },
+  {
+    "module_name": "biomni.tool.literature",
+    "tasks": [
+      "Find recent literature on the gene implicated in a patient's genomic variant report.",
+      "Summarize the clinical significance described in papers about a diagnosis noted in this session."
+    ]
+  },
+  {
+    "module_name": "biomni.tool.systems_biology",
+    "tasks": [
+      "Given a gene set from a patient sample's expression profile, run a pathway enrichment analysis.",
+      "Model the likely downstream network effects of a gene knockout identified for this case."
+    ]
+  }
+]
