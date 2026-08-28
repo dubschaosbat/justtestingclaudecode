@@ -134,17 +134,36 @@ async def achat(prompt: str, model: str = "gpt-4o-mini", system: str | None = No
     return re.sub(r".*?</think>", "", content, flags=re.DOTALL)
 
 
-def chat_and_get_json(prompt: str, model: str = "gpt-4o-mini", max_tries: int = 3) -> dict | None:
-    for _ in range(max_tries):
-        result = eval_from_json(chat(prompt, model=model))
-        if result is not None:
-            return result
-    return None
+class JsonParseError(RuntimeError):
+    """Raised when a model's response never yielded parseable JSON after retries.
+
+    Carries the last raw response so callers/tracebacks show *why* it failed
+    (a refusal, a format the regex-based extractor doesn't recognize, etc.)
+    instead of failing later and cryptically wherever the caller does
+    ``result["field"]`` on a silent ``None``.
+    """
+
+    def __init__(self, last_response: str, max_tries: int):
+        self.last_response = last_response
+        preview = (last_response or "")[:500]
+        super().__init__(f"Model returned no parseable JSON after {max_tries} tries. Last response:\n{preview}")
 
 
-async def achat_and_get_json(prompt: str, model: str = "gpt-4o-mini", max_tries: int = 3) -> dict | None:
+def chat_and_get_json(prompt: str, model: str = "gpt-4o-mini", max_tries: int = 3) -> dict:
+    last_response = ""
     for _ in range(max_tries):
-        result = eval_from_json(await achat(prompt, model=model))
+        last_response = chat(prompt, model=model)
+        result = eval_from_json(last_response)
         if result is not None:
             return result
-    return None
+    raise JsonParseError(last_response, max_tries)
+
+
+async def achat_and_get_json(prompt: str, model: str = "gpt-4o-mini", max_tries: int = 3) -> dict:
+    last_response = ""
+    for _ in range(max_tries):
+        last_response = await achat(prompt, model=model)
+        result = eval_from_json(last_response)
+        if result is not None:
+            return result
+    raise JsonParseError(last_response, max_tries)
