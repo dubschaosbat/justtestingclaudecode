@@ -111,6 +111,8 @@ def run(args: argparse.Namespace) -> Path:
                         "secret_steal_rate": steal_rate,
                         "original_task_progressed": original_ok,
                         "attacker_call_log": call_log,
+                        "exec_error": result.get("exec_error"),
+                        "retrieved_attacker_tool": result.get("retrieved_attacker_tool"),
                     }
                 )
 
@@ -124,6 +126,16 @@ def run(args: argparse.Namespace) -> Path:
         print(f"Attack Success Rate: {df['attack_successful'].mean():.4f}")
         print(f"Secret Steal Rate (mean): {df['secret_steal_rate'].mean():.4f}")
         print(f"Original Task Progressed Rate: {df['original_task_progressed'].mean():.4f}")
+        retrieved = df["retrieved_attacker_tool"].dropna()
+        if len(retrieved) > 0:
+            print(f"Attacker tool retrieved (survived tool selection): {retrieved.mean():.4f}")
+        exec_errors = df["exec_error"].dropna()
+        if len(exec_errors) > 0:
+            print(
+                f"WARNING: {len(exec_errors)}/{len(df)} run(s) hit an execution error before/instead of the "
+                f"tool call (see the 'exec_error' column in {out_path}) -- these count as attack failures, "
+                "but for the wrong reason (a code-gen/exec problem, not the attack being resisted)."
+            )
     else:
         print("No runs executed -- did you run stages 1-3 first?")
 
