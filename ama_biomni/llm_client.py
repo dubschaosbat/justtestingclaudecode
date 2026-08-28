@@ -12,6 +12,7 @@ fall back to a plain OpenAI-compatible client, matching AMA's original behavior.
 from __future__ import annotations
 
 import ast
+import json
 import os
 import re
 from functools import lru_cache
@@ -21,29 +22,53 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _parse_object(text: str) -> dict | None:
+    """Parse ``text`` as a JSON object, trying real JSON first.
+
+    ``json.loads`` handles standard JSON escaping (``\\n`` inside a string,
+    ``true``/``false``/``null``) that ``ast.literal_eval`` -- a *Python*
+    literal parser, not a JSON parser -- can choke on even for well-formed
+    JSON. AMA's original ``eval_from_json`` only tried ``ast.literal_eval``;
+    that was enough for the shorter completions it saw from GPT-4o-mini/Qwen,
+    but Claude's longer, more carefully-escaped JSON strings trip it up.
+    ``ast.literal_eval`` stays as a fallback for models that emit
+    Python-literal-styled output (e.g. single-quoted strings).
+    """
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    try:
+        return ast.literal_eval(text)
+    except Exception:
+        return None
+
+
 def eval_from_json(response: str) -> dict | None:
     """Best-effort extraction of a JSON object embedded in a chat completion.
 
-    Ported near-verbatim from AMA's ``eval_from_json`` -- models routinely wrap
-    their JSON answer in ```json fences, plain fences, or nothing at all.
+    Ported from AMA's ``eval_from_json`` -- models routinely wrap their JSON
+    answer in ```json fences, plain fences, or nothing at all.
     """
     if response is None:
         return None
     response = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL)
     response = response.lstrip("\n")
-    try:
-        match = re.search(r"```json(.*?)```", response, re.DOTALL)
-        if match:
-            return ast.literal_eval(match.group(1).strip())
 
-        match = re.search(r"```(.*?)```", response, re.DOTALL)
-        if match:
-            content = match.group(1).strip().removeprefix("json").strip()
-            return ast.literal_eval(content)
+    match = re.search(r"```json(.*?)```", response, re.DOTALL)
+    if match:
+        result = _parse_object(match.group(1).strip())
+        if result is not None:
+            return result
 
-        return ast.literal_eval(response.strip())
-    except Exception:
-        return None
+    match = re.search(r"```(.*?)```", response, re.DOTALL)
+    if match:
+        content = match.group(1).strip().removeprefix("json").strip()
+        result = _parse_object(content)
+        if result is not None:
+            return result
+
+    return _parse_object(response.strip())
 
 
 @lru_cache(maxsize=None)
@@ -145,7 +170,7 @@ class JsonParseError(RuntimeError):
 
     def __init__(self, last_response: str, max_tries: int):
         self.last_response = last_response
-        preview = (last_response or "")[:500]
+        preview = (last_response or "")[:4000]
         super().__init__(f"Model returned no parseable JSON after {max_tries} tries. Last response:\n{preview}")
 
 

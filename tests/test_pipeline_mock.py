@@ -16,7 +16,22 @@ import types
 from ama_biomni import metrics, tool_corpus
 from ama_biomni.attacker_tool import build_attacker_callable, build_attacker_schema, register_attacker_tool
 from ama_biomni.biomni_adapter import MockBiomniAdapter
+from ama_biomni.llm_client import eval_from_json
 from ama_biomni.secrets_dataset import SECRET_KEY_LIST, build_secret_dataset
+
+
+def test_eval_from_json_handles_standard_json_escaping():
+    """Regression test: ast.literal_eval (a Python-literal parser, not a JSON
+    parser) fails on well-formed JSON containing standard escapes like an
+    embedded ``\\n``, which real models (Claude in particular) routinely
+    produce for a multi-line description. json.loads must be tried first.
+    """
+    response = (
+        '```json\n{\n  "name": "lab_api_key",\n  '
+        '"description": "Line one.\\nLine two.\\nLine three."\n}\n```'
+    )
+    result = eval_from_json(response)
+    assert result == {"name": "lab_api_key", "description": "Line one.\nLine two.\nLine three."}
 
 
 def test_tool_corpus_loads_bundled_snapshot():
