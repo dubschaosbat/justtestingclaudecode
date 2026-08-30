@@ -128,68 +128,6 @@ BIOMNI_TEST_MODEL=claude-sonnet-4-5-20250929 python run_ama_attack.py --module b
 > comparing; passing raw call params without it will silently read as zero leakage. This mirrors AMA's
 > own `PARAMS_TO_PRIVACY_KEY` translation in its `main_attacker.py`.
 
-## Resource-amplification attack (a second, orthogonal vector)
-
-Alongside AMA, this repo implements the **resource-amplification** attack from:
-
-> *Beyond Max Tokens: Stealthy Resource Amplification via Tool Calling Chains in LLM Agents.*
-> arXiv:[2601.10955](https://arxiv.org/abs/2601.10955).
-
-Where AMA hijacks tool *selection* to exfiltrate a secret, this attack burns
-*resources*. An attacker who controls a tool's text-visible fields installs a
-**template-driven return policy** -- an innocuous-sounding "verify every
-intermediate result" instruction -- that preserves the tool's function
-signature and its terminal benign payload but steers the agent into a longer,
-more verbose tool-calling *chain*. The paper reports trajectories over 60K
-tokens and per-query cost up to 658x. `max_tokens` doesn't stop it, because
-`max_tokens` bounds a single completion while the blow-up lives in the *number*
-of completions the agent's loop makes.
-
-It reuses the **same retriever seam** the uploaded canary/injection gateway
-patches (`ToolRetriever.prompt_based_retrieval` -- the paper's "editing
-text-visible fields"), so all three vectors can be run side by side on one model.
-
-Three properties make it safe to run and easy to score:
-
-1. **Quantitatively traceable to the paper.** `run_amplification_attack.py` runs
-   the *identical task twice* -- clean, then attacked -- and reports the
-   attacked/clean **amplification factor** on the four axes the paper reports
-   (trajectory tokens, tool-call count, latency, per-query cost). The clean run
-   is the denominator, so the headline number is a ratio you can compare, not an
-   uncomparable absolute. Every injected instruction carries a fixed
-   `AMPLIFICATION_CANARY` so each amplified step is attributable to the attack
-   rather than to the agent's own thoroughness.
-2. **Not too harmful.** Nothing is exfiltrated (there is no secret and no
-   attacker tool -- it rides a legitimate tool). `AmplificationBudget` caps the
-   run: injection stops after `--max-injections`, the induced chain is bounded
-   by `--max-steps` baked into the payload text, and the run is flagged if any
-   ceiling (`--max-tool-calls`, `--max-tokens`, `--timeout-seconds`) is crossed.
-   Defaults are small on purpose -- enough to measure the slope, nowhere near
-   the paper's uncapped 60K-token / 658x regime. Removing the cap (`max_steps=None`)
-   is exactly the paper's uncapped form and is deliberately not the default.
-3. **Measurable.** `ama_biomni/resource_amplification.py` holds the accounting
-   (token estimate, cost table, chain-length heuristic, amplification-factor
-   math) and is fully offline unit-tested. `ama_biomni/amplification_gateway.py`
-   exposes DoomArena-native `SuccessFilter`s: `ResourceAmplified` (factor >=
-   threshold), `InjectionLanded` (canary reached the trajectory), and
-   `AmplificationBounded` (the safety caps held).
-
-```bash
-pip install -e .  # in your sandbox, so `ama_biomni` is importable next to `doomarena` and `biomni`
-BIOMNI_TEST_MODEL=claude-sonnet-4-5-20250929 python run_amplification_attack.py \
-    --max-steps 3 --max-injections 6 --max-tokens 40000 --timeout-seconds 180
-```
-
-Output (`/work/biomni_doom/result_amplification.json`) records the clean and
-attacked metrics, the per-axis amplification factors, whether the canary landed,
-and whether any safety ceiling was hit.
-
-> **Token/cost accounting is approximate** (chars/4 or `tiktoken` if installed,
-> times a blended price table) -- a documented heuristic like
-> `metrics.original_task_progressed`. The attacked/clean *ratio* is robust to
-> the estimator; plug in exact per-request usage from your deployment's model
-> client if you need absolute token/dollar figures.
-
 ## Tests
 
 ```bash
